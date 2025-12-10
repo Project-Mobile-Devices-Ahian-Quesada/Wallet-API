@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());                    // permite que tu Android se conecte
 app.use(express.json());            // para leer JSON del body
 
-const FILE = '/tmp/expenses.json';
+const FILE = 'expenses.json';
 
 
 // Si no existe el archivo, crea uno vacío
