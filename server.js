@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '10mb' })); // necesario para fotos grandes
+app.use(express.json({ limit: '10mb' }));
 
 const FILE = 'expenses.json';
 
@@ -40,19 +40,31 @@ app.get('/expenses', (req, res) => {
     res.json(expenses.sort((a, b) => new Date(b.date) - new Date(a.date)));
 });
 
-// GUARDAR SALDO INICIAL
+// GUARDAR SALDO INICIAL 
 app.post('/initial-balance', (req, res) => {
     const { amount } = req.body;
     if (!amount || amount < 0) {
         return res.status(400).json({ error: "Monto inválido" });
     }
     const data = readData();
-    data.balance = parseFloat(amount);
+    data.balance = parseFloat(amount);  // ← ESTABLECE EL SALDO
     writeData(data);
     res.json({ success: true, balance: data.balance });
 });
 
-// AGREGAR GASTO (FOTOS FUNCIONAN)
+// AÑADIR INGRESO (SUMA AL SALDO ACTUAL)
+app.post('/add-income', (req, res) => {
+    const { amount } = req.body;
+    if (!amount || amount <= 0) return res.status(400).json({ error: "Monto inválido" });
+
+    const data = readData();
+    data.balance += parseFloat(amount);
+    writeData(data);
+
+    res.json({ success: true, newBalance: data.balance });
+});
+
+// AGREGAR GASTO
 app.post('/expenses', (req, res) => {
     const { description, amount, photoBase64 } = req.body;
 
@@ -66,7 +78,7 @@ app.post('/expenses', (req, res) => {
         description,
         amount: parseFloat(amount),
         date: new Date().toISOString(),
-        photoBase64: photoBase64 || null  // ← GUARDA LA FOTO SI LA ENVÍAS
+        photoBase64: photoBase64 || null
     };
 
     data.expenses.push(newExpense);
@@ -84,16 +96,14 @@ app.put('/expenses/:id', (req, res) => {
     const data = readData();
     const index = data.expenses.findIndex(e => e.id === id);
 
-    if (index === -1) {
-        return res.status(404).json({ error: "Gasto no encontrado" });
-    }
+    if (index === -1) return res.status(404).json({ error: "Gasto no encontrado" });
 
-    // Actualizamos solo lo que viene
+    const oldAmount = data.expenses[index].amount;
+
     if (description) data.expenses[index].description = description;
     if (amount !== undefined) {
-        const oldAmount = data.expenses[index].amount;
         data.expenses[index].amount = parseFloat(amount);
-        data.balance += oldAmount - parseFloat(amount); // recalcular saldo
+        data.balance += oldAmount - parseFloat(amount);
     }
     if (photoBase64 !== undefined) data.expenses[index].photoBase64 = photoBase64;
 
@@ -107,9 +117,7 @@ app.delete('/expenses/:id', (req, res) => {
     const data = readData();
     const index = data.expenses.findIndex(e => e.id === id);
 
-    if (index === -1) {
-        return res.status(404).json({ error: "No encontrado" });
-    }
+    if (index === -1) return res.status(404).json({ error: "No encontrado" });
 
     data.balance += data.expenses[index].amount;
     data.expenses.splice(index, 1);
@@ -117,18 +125,18 @@ app.delete('/expenses/:id', (req, res) => {
     res.json({ success: true });
 });
 
-// BORRAR TODO
-app.delete('/reset', (req, res) => {
-    writeData({ expenses: [], balance: 0 });
-    res.json({ message: "Todo borrado" });
-});
-
-// BORRAR SOLO GASTOS (NO toca el saldo)
+// BORRAR TODOS LOS GASTOS (NO toca el saldo)
 app.delete('/reset-expenses-only', (req, res) => {
     const data = readData();
     data.expenses = [];
-    writeData(data); // mantiene el balance
+    writeData(data);
     res.json({ message: "Gastos borrados, saldo mantenido", balance: data.balance });
+});
+
+// BORRAR TODO (saldo + gastos)
+app.delete('/reset', (req, res) => {
+    writeData({ expenses: [], balance: 0 });
+    res.json({ message: "Todo borrado" });
 });
 
 const PORT = process.env.PORT || 3000;
