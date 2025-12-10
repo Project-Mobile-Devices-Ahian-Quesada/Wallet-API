@@ -123,6 +123,14 @@ app.delete('/reset', (req, res) => {
     res.json({ message: "Todo borrado" });
 });
 
+// BORRAR SOLO GASTOS (NO toca el saldo)
+app.delete('/reset-expenses-only', (req, res) => {
+    const data = readData();
+    data.expenses = [];
+    writeData(data); // mantiene el balance
+    res.json({ message: "Gastos borrados, saldo mantenido", balance: data.balance });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log('WalletTracker API - CORRIENDO EN RENDER');
