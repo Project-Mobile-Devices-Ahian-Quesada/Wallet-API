@@ -9,7 +9,6 @@ app.use(express.json({ limit: '10mb' }));
 
 const FILE = 'expenses.json';
 
-// Crear archivo si no existe
 if (!fs.existsSync(FILE)) {
     fs.writeFileSync(FILE, JSON.stringify({ expenses: [], balance: 0 }, null, 2));
 }
@@ -23,51 +22,52 @@ function writeData(data) {
     fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
 }
 
-// Ruta principal
-app.get('/', (req, res) => {
-    res.json({ message: "WalletTracker API - ¡CORRIENDO!" });
-});
-
-// Obtener saldo
-app.get('/balance', (req, res) => {
-    const { balance } = readData();
-    res.json({ balance });
-});
-
-// Obtener todos los gastos
+// Rutas existentes (las tienes perfectas)
+app.get('/', (req, res) => res.json({ message: "WalletTracker API - ¡CORRIENDO!" }));
+app.get('/balance', (req, res) => res.json({ balance: readData().balance }));
 app.get('/expenses', (req, res) => {
     const { expenses } = readData();
     res.json(expenses.sort((a, b) => new Date(b.date) - new Date(a.date)));
 });
-
-// GUARDAR SALDO INICIAL 
 app.post('/initial-balance', (req, res) => {
     const { amount } = req.body;
-    if (!amount || amount < 0) {
-        return res.status(400).json({ error: "Monto inválido" });
-    }
+    if (!amount || amount < 0) return res.status(400).json({ error: "Monto inválido" });
     const data = readData();
-    data.balance = parseFloat(amount);  // ← ESTABLECE EL SALDO
+    data.balance = parseFloat(amount);
     writeData(data);
     res.json({ success: true, balance: data.balance });
 });
 
-// AÑADIR INGRESO (SUMA AL SALDO ACTUAL)
+// === AÑADIR INGRESO (AHORA SÍ APARECE EN LA LISTA EN VERDE) ===
 app.post('/add-income', (req, res) => {
-    const { amount } = req.body;
-    if (!amount || amount <= 0) return res.status(400).json({ error: "Monto inválido" });
+    const { amount, description = "Ingreso manual" } = req.body;
+
+    if (!amount || amount <= 0) {
+        return res.status(400).json({ error: "Monto inválido" });
+    }
 
     const data = readData();
+
+    // Guardamos como "gasto negativo" para que aparezca en la lista
+    const newIncome = {
+        id: uuidv4(),
+        description,
+        amount: -parseFloat(amount),  // NEGATIVO → el balance sube
+        date: new Date().toISOString(),
+        photoBase64: null,
+        isIncome: true  // PARA IDENTIFICARLO EN LA APP
+    };
+
+    data.expenses.push(newIncome);
     data.balance += parseFloat(amount);
     writeData(data);
 
     res.json({ success: true, newBalance: data.balance });
 });
 
-// AGREGAR GASTO
+// === RESTO DE TUS ENDPOINTS (perfectos) ===
 app.post('/expenses', (req, res) => {
     const { description, amount, photoBase64 } = req.body;
-
     if (!description || !amount || amount <= 0) {
         return res.status(400).json({ error: "Faltan datos o monto inválido" });
     }
@@ -78,7 +78,8 @@ app.post('/expenses', (req, res) => {
         description,
         amount: parseFloat(amount),
         date: new Date().toISOString(),
-        photoBase64: photoBase64 || null
+        photoBase64: photoBase64 || null,
+        isIncome: false
     };
 
     data.expenses.push(newExpense);
@@ -88,7 +89,6 @@ app.post('/expenses', (req, res) => {
     res.status(201).json(newExpense);
 });
 
-// EDITAR GASTO
 app.put('/expenses/:id', (req, res) => {
     const { id } = req.params;
     const { description, amount, photoBase64 } = req.body;
@@ -111,7 +111,6 @@ app.put('/expenses/:id', (req, res) => {
     res.json(data.expenses[index]);
 });
 
-// BORRAR GASTO
 app.delete('/expenses/:id', (req, res) => {
     const { id } = req.params;
     const data = readData();
@@ -125,7 +124,6 @@ app.delete('/expenses/:id', (req, res) => {
     res.json({ success: true });
 });
 
-// BORRAR TODOS LOS GASTOS (NO toca el saldo)
 app.delete('/reset-expenses-only', (req, res) => {
     const data = readData();
     data.expenses = [];
@@ -133,7 +131,6 @@ app.delete('/reset-expenses-only', (req, res) => {
     res.json({ message: "Gastos borrados, saldo mantenido", balance: data.balance });
 });
 
-// BORRAR TODO (saldo + gastos)
 app.delete('/reset', (req, res) => {
     writeData({ expenses: [], balance: 0 });
     res.json({ message: "Todo borrado" });
